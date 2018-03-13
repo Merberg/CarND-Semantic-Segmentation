@@ -98,9 +98,7 @@ def optimize(nn_last_layer, truth_label, learning_rate, num_classes):
     with tf.name_scope("xent"):
         xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=truth_label, logits=logits),
                               name="xent")
-        tf.summary.scalar("xent", xent)
-        
-        
+    
     with tf.name_scope("train"):
         train_op = tf.train.AdamOptimizer(learning_rate).minimize(xent)
     
@@ -125,33 +123,39 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     :param keep_prob: TF Placeholder for dropout keep probability
     :param learning_rate: TF Placeholder for learning rate
     """
-    LEARNING_RATE = 0.001
-    KEEP_PROB = 0.5
-        
+    LEARNING_RATE = 1e-5
+    KEEP_PROB = 0.75
+    
+	# Using TensorBoard to generate visuals
+    tf.summary.scalar('loss', cross_entropy_loss)
+    tf.summary.histogram('histogram loss', cross_entropy_loss)
+    summary_out = tf.summary.merge_all()
+    
     sess.run(tf.global_variables_initializer())
-    writer = tf.summary.FileWriter(LOGDIR)
+	
+    writer = tf.summary.FileWriter(LOGDIR, sess.graph)
     writer.add_graph(sess.graph)
     
     print("Training with {} Batches...".format(batch_size))
+    i = 0
     
     for epoch_i in range(epochs):
         print("EPOCH {}".format(epoch_i))
         
         for batch_images, batch_labels in get_batches_fn(batch_size):            
-            train_feed_dict = {
-                input_image: batch_images,
-                truth_label: batch_labels,
-                keep_prob: KEEP_PROB,
-                learning_rate: LEARNING_RATE}
-            _, loss = sess.run([train_op, cross_entropy_loss], feed_dict=train_feed_dict)
-
-            
+            _, loss, s = sess.run([train_op, cross_entropy_loss, summary_out],
+                                  feed_dict={input_image: batch_images, 
+                                             truth_label: batch_labels,
+                                             keep_prob: KEEP_PROB,
+                                             learning_rate: LEARNING_RATE})
             print("\tloss {:.5f}".format(loss))
-            
+            writer.add_summary(s, i)
+            i += 1
+    
+    writer.close()
+    print("Run `tensorboard --logdir {}` to see the results.".format(LOGDIR, sess.graph))
     pass
     
-    print('Run `tensorboard --logdir %s` to see the training results.' % LOGDIR)
-
 tests.test_train_nn(train_nn)
 
 
@@ -161,7 +165,7 @@ def run():
     data_dir = './data'
     runs_dir = './runs'
     tests.test_for_kitti_dataset(data_dir)
-    EPOCHS = 10
+    EPOCHS = 25
     BATCH_SIZE = 8
 
     # Download pretrained vgg model
@@ -197,6 +201,7 @@ def run():
 
         # Save inference data using helper.save_inference_samples
         helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
+        
 
         # OPTIONAL: Apply the trained model to a video
         # See advanced lane finding from Term 1
