@@ -2,6 +2,7 @@ import os.path
 import tensorflow as tf
 import helper
 import warnings
+import time
 from distutils.version import LooseVersion
 import project_tests as tests
 
@@ -95,9 +96,12 @@ def optimize(nn_last_layer, truth_label, learning_rate, num_classes):
     """
     logits = tf.reshape(nn_last_layer, (-1, num_classes))
     
+    reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+    
     with tf.name_scope("xent"):
         xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=truth_label, logits=logits),
                               name="xent")
+        xent = xent + sum(reg_losses)
     
     with tf.name_scope("train"):
         train_op = tf.train.AdamOptimizer(learning_rate).minimize(xent)
@@ -126,14 +130,15 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     LEARNING_RATE = 1e-5
     KEEP_PROB = 0.75
     
-	# Using TensorBoard to generate visuals
+    # Using TensorBoard to generate visuals
     tf.summary.scalar('loss', cross_entropy_loss)
     tf.summary.histogram('histogram loss', cross_entropy_loss)
     summary_out = tf.summary.merge_all()
     
     sess.run(tf.global_variables_initializer())
-	
-    writer = tf.summary.FileWriter(LOGDIR, sess.graph)
+
+    writer_folder = str(time.time());
+    writer = tf.summary.FileWriter(LOGDIR+writer_folder, sess.graph)
     writer.add_graph(sess.graph)
     
     print("Training with {} Batches...".format(batch_size))
@@ -153,7 +158,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
             i += 1
     
     writer.close()
-    print("Run `tensorboard --logdir {}` to see the results.".format(LOGDIR, sess.graph))
+    print("Run `tensorboard --logdir {}` to see the results.".format(LOGDIR+writer_folder))
     pass
     
 tests.test_train_nn(train_nn)
@@ -170,10 +175,6 @@ def run():
 
     # Download pretrained vgg model
     helper.maybe_download_pretrained_vgg(data_dir)
-
-    # OPTIONAL: Train and Inference on the cityscapes dataset instead of the Kitti dataset.
-    # You'll need a GPU with at least 10 teraFLOPS to train on.
-    #  https://www.cityscapes-dataset.com/
     
     # TF Placeholders
     truth_label = tf.placeholder(tf.float32, shape=[None, image_shape[0], image_shape[1], NUM_CLASSES], 
