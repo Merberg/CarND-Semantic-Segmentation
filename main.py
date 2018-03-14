@@ -3,6 +3,9 @@ import tensorflow as tf
 import helper
 import warnings
 import time
+from moviepy.editor import VideoFileClip
+import numpy as np
+import scipy.misc
 from distutils.version import LooseVersion
 import project_tests as tests
 
@@ -56,34 +59,27 @@ def layers(vgg_pool3, vgg_pool4, vgg_pool7, num_classes):
     :param num_classes: Number of classes to classify
     :return: The Tensor for the last layer of output
     """
-    INIT_STD = 0.1
     REG_SCALE = 1e-3
     l7_conv2d = tf.layers.conv2d(vgg_pool7, num_classes, 1, padding='same', 
-                                 kernel_initializer=tf.truncated_normal_initializer(stddev=INIT_STD),
                                  kernel_regularizer=tf.contrib.layers.l2_regularizer(REG_SCALE), 
                                  name="layer7_conv1x1")
     output = tf.layers.conv2d_transpose(l7_conv2d, num_classes, 4, strides=(2,2), padding='same',
-                                        kernel_initializer=tf.truncated_normal_initializer(stddev=INIT_STD), 
                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(REG_SCALE),
                                         name="layer7_convT")
         
     l4_conv2d = tf.layers.conv2d(vgg_pool4, num_classes, 1, padding='same',
-                                 kernel_initializer=tf.truncated_normal_initializer(stddev=INIT_STD), 
                                  kernel_regularizer=tf.contrib.layers.l2_regularizer(REG_SCALE),
                                  name="layer4_conv1x1")
     l4_add = tf.add(output, l4_conv2d, name="layer4_add")
     output = tf.layers.conv2d_transpose(l4_add, num_classes, 4, strides=(2,2), padding='same',
-                                        kernel_initializer=tf.truncated_normal_initializer(stddev=INIT_STD),
                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(REG_SCALE),
                                         name="layer4_convT")
         
     l3_conv2d = tf.layers.conv2d(vgg_pool3, num_classes, 1, padding='same',
-                                 kernel_initializer=tf.truncated_normal_initializer(stddev=INIT_STD), 
                                  kernel_regularizer=tf.contrib.layers.l2_regularizer(REG_SCALE),
                                  name="layer3_conv1x1")
     l3_add = tf.add(output, l3_conv2d, name="layer3_add")
     output = tf.layers.conv2d_transpose(l3_add, num_classes, 16, strides=(8,8), padding='same',
-                                        kernel_initializer=tf.truncated_normal_initializer(stddev=INIT_STD),
                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(REG_SCALE),
                                         name="layer3_convT")
         
@@ -169,6 +165,34 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     
 tests.test_train_nn(train_nn)
 
+def find_lane(img, sess, logits, keep_prob, image_pl, image_shape):
+    """
+    Generate test output using the test images
+    :param sess: TF session
+    :param logits: TF Tensor for the logits
+    :param keep_prob: TF Placeholder for the dropout keep robability
+    :param image_pl: TF Placeholder for the image placeholder
+    :param image_shape: Tuple - Shape of image
+    :return: Output for for each test image
+    """
+    image = scipy.misc.imresize(img, image_shape)
+
+    im_softmax = sess.run(
+        [tf.nn.softmax(logits)],
+        {keep_prob: 1.0, image_pl: [image]})
+    im_softmax = im_softmax[0][:, 1].reshape(image_shape[0], image_shape[1])
+    segmentation = (im_softmax > 0.5).reshape(image_shape[0], image_shape[1], 1)
+    
+    mask = np.dot(segmentation, np.array([[0, 255, 0, 127]]))
+    mask = scipy.misc.toimage(mask, mode="RGBA")
+    street_im = scipy.misc.toimage(image)
+    street_im.paste(mask, box=None, mask=mask)
+    return street_im
+
+def clip_find_lane(clip, sess, logits, keep_prob, image_pl, image_shape):
+    def clip_lane_finding(clip_image):
+        return find_lane(clip_image, sess, logits, keep_prob, image_pl, image_shape)
+    return clip.fl_image(clip_lane_finding)
 
 def run():
     NUM_CLASSES = 2
@@ -176,7 +200,7 @@ def run():
     data_dir = './data'
     runs_dir = './runs'
     tests.test_for_kitti_dataset(data_dir)
-    EPOCHS = 35
+    EPOCHS = 30
     BATCH_SIZE = 8
 
     # Download pretrained vgg model
@@ -194,9 +218,6 @@ def run():
         # Create function to get batches
         get_batches_fn = helper.gen_batch_function(os.path.join(data_dir, 'data_road/training'), image_shape)
 
-        # OPTIONAL: Augment Images for better results
-        #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
-
         # Build NN using load_vgg, layers, and optimize function
         input_image, keep_prob, layer3_out, layer4_out, layer7_out = load_vgg(sess, vgg_path)
         nn_last_layer = layers(layer3_out, layer4_out, layer7_out, NUM_CLASSES)
@@ -212,6 +233,9 @@ def run():
 
         # OPTIONAL: Apply the trained model to a video
         # See advanced lane finding from Term 1
+        #clip1 = VideoFileClip(data_dir + 'harder_challenge_video.mp4').subclip(1,5)
+        #projectClip = clip1.fx(clip_find_lane, sess, logits, keep_prob, input_image, image_shape)
+        #projectClip.write_videofile(runs_dir + '/harder_challenge_results.mp4', audio=False)
 
 
 if __name__ == '__main__':
