@@ -56,27 +56,34 @@ def layers(vgg_pool3, vgg_pool4, vgg_pool7, num_classes):
     :param num_classes: Number of classes to classify
     :return: The Tensor for the last layer of output
     """
+    INIT_STD = 0.1
     REG_SCALE = 1e-3
     l7_conv2d = tf.layers.conv2d(vgg_pool7, num_classes, 1, padding='same', 
+                                 kernel_initializer=tf.truncated_normal_initializer(stddev=INIT_STD),
                                  kernel_regularizer=tf.contrib.layers.l2_regularizer(REG_SCALE), 
                                  name="layer7_conv1x1")
-    output = tf.layers.conv2d_transpose(l7_conv2d, num_classes, 4, strides=(2,2), padding='same', 
+    output = tf.layers.conv2d_transpose(l7_conv2d, num_classes, 4, strides=(2,2), padding='same',
+                                        kernel_initializer=tf.truncated_normal_initializer(stddev=INIT_STD), 
                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(REG_SCALE),
                                         name="layer7_convT")
         
-    l4_conv2d = tf.layers.conv2d(vgg_pool4, num_classes, 1, padding='same', 
+    l4_conv2d = tf.layers.conv2d(vgg_pool4, num_classes, 1, padding='same',
+                                 kernel_initializer=tf.truncated_normal_initializer(stddev=INIT_STD), 
                                  kernel_regularizer=tf.contrib.layers.l2_regularizer(REG_SCALE),
                                  name="layer4_conv1x1")
     l4_add = tf.add(output, l4_conv2d, name="layer4_add")
-    output = tf.layers.conv2d_transpose(l4_add, num_classes, 4, strides=(2,2), padding='same', 
+    output = tf.layers.conv2d_transpose(l4_add, num_classes, 4, strides=(2,2), padding='same',
+                                        kernel_initializer=tf.truncated_normal_initializer(stddev=INIT_STD),
                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(REG_SCALE),
                                         name="layer4_convT")
         
-    l3_conv2d = tf.layers.conv2d(vgg_pool3, num_classes, 1, padding='same', 
+    l3_conv2d = tf.layers.conv2d(vgg_pool3, num_classes, 1, padding='same',
+                                 kernel_initializer=tf.truncated_normal_initializer(stddev=INIT_STD), 
                                  kernel_regularizer=tf.contrib.layers.l2_regularizer(REG_SCALE),
                                  name="layer3_conv1x1")
     l3_add = tf.add(output, l3_conv2d, name="layer3_add")
-    output = tf.layers.conv2d_transpose(l3_add, num_classes, 16, strides=(8,8), padding='same', 
+    output = tf.layers.conv2d_transpose(l3_add, num_classes, 16, strides=(8,8), padding='same',
+                                        kernel_initializer=tf.truncated_normal_initializer(stddev=INIT_STD),
                                         kernel_regularizer=tf.contrib.layers.l2_regularizer(REG_SCALE),
                                         name="layer3_convT")
         
@@ -94,13 +101,12 @@ def optimize(nn_last_layer, truth_label, learning_rate, num_classes):
     :param num_classes: Number of classes to classify
     :return: Tuple of (logits, train_op, cross_entropy_loss)
     """
-    logits = tf.reshape(nn_last_layer, (-1, num_classes))
-    
-    reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+    logits = tf.reshape(nn_last_layer, (-1, num_classes))    
     
     with tf.name_scope("xent"):
         xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=truth_label, logits=logits),
                               name="xent")
+        reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         xent = xent + sum(reg_losses)
     
     with tf.name_scope("train"):
@@ -127,8 +133,8 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     :param keep_prob: TF Placeholder for dropout keep probability
     :param learning_rate: TF Placeholder for learning rate
     """
-    LEARNING_RATE = 1e-5
-    KEEP_PROB = 0.75
+    LEARNING_RATE = 1e-4
+    KEEP_PROB = 0.5
     
     # Using TensorBoard to generate visuals
     tf.summary.scalar('loss', cross_entropy_loss)
@@ -170,7 +176,7 @@ def run():
     data_dir = './data'
     runs_dir = './runs'
     tests.test_for_kitti_dataset(data_dir)
-    EPOCHS = 25
+    EPOCHS = 35
     BATCH_SIZE = 8
 
     # Download pretrained vgg model
