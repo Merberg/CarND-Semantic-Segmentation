@@ -187,6 +187,7 @@ def find_lane(img, sess, logits, keep_prob, image_pl, image_shape):
     mask = scipy.misc.toimage(mask, mode="RGBA")
     street_im = scipy.misc.toimage(image)
     street_im.paste(mask, box=None, mask=mask)
+    street_im = scipy.misc.imresize(street_im, img.shape)
     return street_im
 
 def clip_find_lane(clip, sess, logits, keep_prob, image_pl, image_shape):
@@ -233,9 +234,9 @@ def run():
 
         # OPTIONAL: Apply the trained model to a video
         # See advanced lane finding from Term 1
-        #clip1 = VideoFileClip(data_dir + 'harder_challenge_video.mp4').subclip(1,5)
-        #projectClip = clip1.fx(clip_find_lane, sess, logits, keep_prob, input_image, image_shape)
-        #projectClip.write_videofile(runs_dir + '/harder_challenge_results.mp4', audio=False)
+        clip1 = VideoFileClip(data_dir + '/challenge_video.mp4').subclip(1,20)
+        projectClip = clip1.fx(clip_find_lane, sess, logits, keep_prob, input_image, image_shape)
+        projectClip.write_videofile(runs_dir + '/challenge_results.mp4', audio=False)
 
 
 if __name__ == '__main__':
